@@ -1,0 +1,96 @@
+diff --git a/src/App.tsx b/src/App.tsx
+index 7894583..8935902 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -260,8 +260,8 @@ function Dashboard({ data, onNavigate }: { data: AppData; onNavigate: (page: Pag
+   const sorted = [...data.reports].sort((a, b) => b.year - a.year);
+   const current = sorted[0];
+   const previous = sorted[1];
+-  const revenueChange = current && previous ? ((current.revenue - previous.revenue) / previous.revenue) * 100 : 0;
+-  const employeeChange = current && previous ? ((current.employees - previous.employees) / previous.employees) * 100 : 0;
++  const revenueChange = current && previous && previous.revenue ? ((current.revenue - previous.revenue) / previous.revenue) * 100 : 0;
++  const employeeChange = current && previous && previous.employees ? ((current.employees - previous.employees) / previous.employees) * 100 : 0;
+   const marginChange = current && previous ? current.margin - previous.margin : 0;
+ 
+   const alerts = [
+@@ -447,7 +447,7 @@ function ReportsPage({ data, save }: { data: AppData; save: (data: AppData) => v
+       <section className="reports-list">
+         {[...data.reports].sort((a, b) => b.year - a.year).map((item, index, all) => {
+           const previous = all[index + 1];
+-          const evolution = previous ? ((item.revenue - previous.revenue) / previous.revenue) * 100 : null;
++          const evolution = previous && previous.revenue ? ((item.revenue - previous.revenue) / previous.revenue) * 100 : null;
+           return (
+             <article className="card report-row" key={item.id}>
+               <div className="report-year"><span>EXERCICE</span><strong>{item.year}</strong>{index === 0 && <em>Le plus récent</em>}</div>
+@@ -514,6 +514,7 @@ function canonicalCompany(name: string) {
+ 
+ function formatDate(value?: string) {
+   if (!value) return "Date non précisée";
++  if (Number.isNaN(new Date(value).getTime())) return "Date non précisée";
+   return new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", year: "numeric" }).format(new Date(value));
+ }
+ 
+@@ -538,7 +539,7 @@ function MarketsPage({
+     try {
+       const stored = localStorage.getItem("mxw-go-no-go-scores");
+       if (!stored) return { fit: 5, capacity: 3, references: 5, margin: 3, deadline: 3, competition: 5 };
+-      const parsed = JSON.parse(stored) as Record<CriterionId, number>;
++      const parsed = { fit: 5, capacity: 3, references: 5, margin: 3, deadline: 3, competition: 5, ...JSON.parse(stored) } as Record<CriterionId, number>;
+       return Object.fromEntries(
+         Object.entries(parsed).map(([key, value]) => [key, value >= 4 ? 5 : value <= 2 ? 1 : 3]),
+       ) as Record<CriterionId, number>;
+@@ -747,7 +748,7 @@ function MarketsPage({
+                   <div><span><Icon name="file" size={15} /> Historique financier</span><strong>{reports.length} exercices disponibles</strong></div>
+                   <div><span><Icon name="building" size={15} /> Couverture géographique</span><strong>À confirmer</strong></div>
+                 </div>
+-                <label className="people-field">
++                <div className="people-field">
+                   <span>Personnes nécessaires pour ce marché</span>
+                   <div>
+                     <button onClick={() => { const next = Math.max(1, peopleRequired - 1); setPeopleRequired(next); localStorage.setItem("mxw-offer-people", String(next)); }}>−</button>
+@@ -755,7 +756,7 @@ function MarketsPage({
+                     <button onClick={() => { const next = peopleRequired + 1; setPeopleRequired(next); localStorage.setItem("mxw-offer-people", String(next)); }}>+</button>
+                   </div>
+                   <small>{peopleRequired} sur {company.employees} collaborateurs · {staffCoverage} % de l’effectif</small>
+-                </label>
++                </div>
+               </aside>
+             </div>
+           </section>}
+@@ -922,6 +923,7 @@ export default function App() {
+       const stored = localStorage.getItem("mxw-data");
+       if (!stored) return initialData;
+       const parsed = JSON.parse(stored) as AppData;
++      if (!parsed?.company || !Array.isArray(parsed.reports)) return initialData;
+       if (parsed.company.sector === "Conseil & services") {
+         return { ...parsed, company: { ...parsed.company, sector: "Nettoyage industriel" } };
+       }
+@@ -936,7 +938,7 @@ export default function App() {
+     if (reports.length < 2) return 0;
+     return (reports[0].margin - reports[1].margin <= -2 ? 1 : 0) +
+       (reports[0].revenue < reports[1].revenue ? 1 : 0) +
+-      ((reports[0].employees - reports[1].employees) / reports[1].employees > 0.08 ? 1 : 0);
++      (reports[1].employees && (reports[0].employees - reports[1].employees) / reports[1].employees > 0.08 ? 1 : 0);
+   }, [data.reports]);
+ 
+   const save = (next: AppData) => {
+diff --git a/vite.config.ts b/vite.config.ts
+index a7bde37..550a4a9 100644
+--- a/vite.config.ts
++++ b/vite.config.ts
+@@ -2,8 +2,14 @@ import { defineConfig, type HtmlTagDescriptor, type Plugin } from 'vite'
+ import react from '@vitejs/plugin-react'
+ import tailwindcss from '@tailwindcss/vite'
+ import path from 'node:path'
++import fs from 'node:fs'
+ 
+-import siteConfiguration from './.figma/make/site.json'
++// .figma/make/site.json n'existe que dans l'environnement Figma Make :
++// on le charge s'il est présent, sinon on utilise une config vide.
++const siteConfigPath = path.resolve(__dirname, '.figma/make/site.json')
++const siteConfiguration: FigmaSiteConfiguration = fs.existsSync(siteConfigPath)
++  ? JSON.parse(fs.readFileSync(siteConfigPath, 'utf-8'))
++  : {}
+ 
+ 
+ // Vite config — https://vitejs.dev/config/
